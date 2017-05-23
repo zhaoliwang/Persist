@@ -11,6 +11,22 @@
 #import "PersistObject.h"
 #import "NSObject+YYModel.h"
 
+#ifdef DEV_BUILD
+#import <objc/runtime.h>
+#endif
+
+@interface XXXPersistVersion : PersistObject
+
+@property (nonatomic, strong) NSString *signatures;
+@property (nonatomic, strong) NSNumber *classVersion;
+@property (nonatomic, strong) NSString *name;
+
+@end
+
+@implementation XXXPersistVersion
+
+@end
+
 /*
  * 用于管理数据库表的锁
  */
@@ -31,6 +47,9 @@
     dispatch_once(&once,^{
         manager = [[PersistLockManager alloc] init];
         manager.locks = [[NSMutableDictionary alloc] init];
+#ifdef DEV_BUILD
+        [manager checkVersion];
+#endif
     });
     
     return manager;
@@ -45,6 +64,122 @@
         return _locks[tableName];
     }
 }
+
+#ifdef DEV_BUILD
+- (void)checkVersion{
+
+    //监测是否存在versionTable
+    PersistEngine *engine = [[PersistEngine alloc] initDBWithName:@"version.sql"];
+    NSString *tableName = @"XXXPersistVersion_Table";
+    BOOL isExistVerisonTable = [engine isTableExists:tableName];
+    NSArray *allObjects;
+
+    if (isExistVerisonTable) {
+        allObjects = [engine getObjectByClassName:@"XXXPersistVersion" fromTable:tableName];
+        allObjects = [PersistHandler transferJsonArray:allObjects];
+    }
+    
+    int numClasses;
+    Class * classes = NULL;
+    numClasses = objc_getClassList(NULL, 0);
+    
+    if (numClasses > 0 ){
+        classes = (__unsafe_unretained Class *)malloc(sizeof(Class) * numClasses);
+        
+        numClasses = objc_getClassList(classes, numClasses);
+        
+        for (int i = 0; i < numClasses; i++) {
+            Class class = classes[i];
+            
+            if ([[self class] isSubClass:class ofSuperClass:[PersistObject class]]) {
+                
+                NSString *className = [NSString stringWithCString:class_getName(class) encoding:NSUTF8StringEncoding];
+                if ([className isEqualToString:@"XXXPersistVersion"] || [className isEqualToString:@"PersistObject"]) {
+                    continue;
+                }
+                
+                unsigned int propertyCount;
+                objc_property_t * properties = class_copyPropertyList(class, &propertyCount);
+                NSMutableArray *attrArray = [[NSMutableArray alloc] init];
+                
+                for (int i = 0; i < propertyCount; i++) {
+                    objc_property_t property = properties[i];
+                    const char *attributes = property_getAttributes(property);
+                    NSString *str = [NSString stringWithCString:attributes encoding:NSUTF8StringEncoding];
+                    [attrArray addObject:str];
+                }
+                
+                [attrArray sortUsingComparator:^NSComparisonResult(id  _Nonnull obj1, id  _Nonnull obj2) {
+                    return [((NSString *)obj1) caseInsensitiveCompare:(NSString *)obj2];
+                }];
+                
+                NSString *signatures = @"";
+                for (NSString *attr in attrArray) {
+                    signatures = [NSString stringWithFormat:@"%@%@",signatures,attr];
+                }
+                
+                int (*getVersion)(id,SEL);
+                getVersion = (int (*)(id, SEL))[class methodForSelector:@selector(getModelVersion)];
+                int version = getVersion(class, @selector(getModelVersion));
+                
+                if (isExistVerisonTable) {
+                    NSString *predicate = [NSString stringWithFormat:@"name='%@'",[NSString stringWithCString:class_getName(class) encoding:NSUTF8StringEncoding]];
+                    NSArray *filtedArray = [allObjects filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:predicate]];
+                    if (filtedArray && filtedArray.count == 1) {
+                        XXXPersistVersion *obj = [filtedArray firstObject];
+                        if (![obj.signatures isEqualToString:signatures]) {
+                            if (version <= [obj.classVersion integerValue]) {
+                                NSString *reason = [NSString stringWithFormat:@"className:%s 字段发生变化但是没有将迁移老数据，请实现方法+ (void)migrationWith:(NSDictionary *)oldDict newObj:(NSMutableDictionary *)newDict version:(NSInteger)version以及 + (NSInteger)getModelVersion;",class_getName(class)];
+                                NSException *exception = [[NSException alloc] initWithName:@"DB Version Error" reason:reason userInfo:nil];
+                                @throw exception;
+
+                            } else {
+                                obj.classVersion = @(version);
+                                obj.signatures = signatures;
+                                [engine updateObject:obj intoTable:tableName];
+                            }
+                        }
+                    } else {
+                        XXXPersistVersion *obj = [[XXXPersistVersion alloc] init];
+                        obj.signatures = signatures;
+                        obj.classVersion = @(version);
+                        obj.name = [NSString stringWithCString:class_getName(class) encoding:NSUTF8StringEncoding];
+                        
+                        [engine putObject:obj intoTable:tableName];
+                    }
+                } else{
+                    [engine createTableWithName:tableName];
+
+                    XXXPersistVersion *obj = [[XXXPersistVersion alloc] init];
+                    obj.signatures = signatures;
+                    obj.classVersion = @(version);
+                    obj.name = [NSString stringWithCString:class_getName(class) encoding:NSUTF8StringEncoding];
+                    
+                    [engine putObject:obj intoTable:tableName];
+                }
+                
+                free(properties);
+
+            }
+ 
+        }
+        free(classes);
+    }
+
+}
+
++ (BOOL)isSubClass:(Class)class ofSuperClass:(Class)targeClass{
+    while(1)
+    {
+        if(class == targeClass) return YES;
+        id superClass = class_getSuperclass(class);
+        if(class == superClass) return (superClass == targeClass);
+        class = superClass;
+    }
+
+}
+
+#endif
 
 @end
 

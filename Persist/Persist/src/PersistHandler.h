@@ -116,5 +116,8 @@ typedef PersistObject* (^UpdatePersistObjectBlock)() ;
 
 + (void)autoUpdateDataWith:(UpdatePersistObjectBlock)block inDB:(NSString *)dbName;
 
+#ifdef DEV_BUILD
++ (NSArray *)transferJsonArray:(NSArray *)objectsArray;
+#endif
 
 @end
