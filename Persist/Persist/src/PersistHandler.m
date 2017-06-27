@@ -129,7 +129,7 @@
                         XXXPersistVersion *obj = [filtedArray firstObject];
                         if (![obj.signatures isEqualToString:signatures]) {
                             if (version <= [obj.classVersion integerValue]) {
-                                NSString *reason = [NSString stringWithFormat:@"className:%s 字段发生变化但是没有将迁移老数据，请实现方法+ (void)migrationWith:(NSDictionary *)oldDict newObj:(NSMutableDictionary *)newDict version:(NSInteger)version以及 + (NSInteger)getModelVersion;",class_getName(class)];
+                                NSString *reason = [NSString stringWithFormat:@"className:%s 字段发生变化但是没有将迁移老数据，请实现方法+ (void)migrationWith:(NSDictionary *)oldDict newObj:(NSMutableDictionary *)newDict version:(NSInteger)version 以及 + (NSInteger)getModelVersion;",class_getName(class)];
                                 NSException *exception = [[NSException alloc] initWithName:@"DB Version Error" reason:reason userInfo:nil];
                                 @throw exception;
 

@@ -302,7 +302,7 @@ static NSString *const DELETE_ITEMS_SQL = @"DELETE from %@ where uuid in ( %@ )"
     [[self class] migrationWithTableName:tableName dbPath:_dbPath];
     
     NSString *sql = [NSString stringWithFormat:QUERY_ITEM_CLASSNAME_SQL, tableName];
-    __block NSMutableArray *result = [NSMutableArray array];
+    NSMutableArray *result = [NSMutableArray array];
     [_dbQueue inDatabase:^(FMDatabase *db) {
         FMResultSet *rs = [db executeQuery:sql, className];
         while ([rs next]) {
@@ -328,7 +328,7 @@ static NSString *const DELETE_ITEMS_SQL = @"DELETE from %@ where uuid in ( %@ )"
     [[self class] migrationWithTableName:tableName dbPath:_dbPath];
     
     NSString *sql = [NSString stringWithFormat:QUERY_ITEM_CLASSNAME_AND_KEYWORD_SQL, tableName, where];
-    __block NSMutableArray *result = [NSMutableArray array];
+    NSMutableArray *result = [NSMutableArray array];
     [_dbQueue inDatabase:^(FMDatabase *db) {
         FMResultSet *rs = [db executeQuery:sql, className];
         while ([rs next]) {
